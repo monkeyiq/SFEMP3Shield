@@ -6,11 +6,27 @@
 
 */
 
+
 #include "SFEMP3Shield.h"
 // inslude the SPI library:
 #include "SPI.h"
 //avr pgmspace library for storing the LUT in program flash instead of sram
 #include <avr/pgmspace.h>
+
+class stopInterruptsRAII
+{
+public:
+    stopInterruptsRAII()
+    {
+        noInterrupts();
+    }
+    ~stopInterruptsRAII()
+    {
+        interrupts();
+    }
+    
+};
+
 
 /**
  * \brief bitrate lookup table
@@ -68,6 +84,29 @@ uint16_t SFEMP3Shield::spiRate;
 //buffer for music
 uint8_t  SFEMP3Shield::mp3DataBuffer[32];
 
+char* p1tracks[] = {"track001.mp3", "track002.mp3", "track003.mp3", 0 };
+//Playlist p1( p1tracks );
+
+SFEMP3Shield::SFEMP3Shield()
+    :
+    lcd( 0 )
+{
+    playlistIndex = 0;
+    playlistMax = 0;
+    
+    playlists[0] = new Playlist( this, p1tracks );
+    playlists[1] = 0;
+    playlist = playlists[ playlistIndex ];
+}
+
+void
+SFEMP3Shield::setDisplay( Shim_CharacterOLEDSPI2* d )
+{
+    lcd = d;
+}
+
+
+
 //------------------------------------------------------------------------------
 /**
  * \brief Initialize the MP3 Player shield.
@@ -87,7 +126,8 @@ uint8_t  SFEMP3Shield::mp3DataBuffer[32];
  * \note The \c SdFat::begin() function is required to be executed prior, as to
  * define the volume for the tracks (aka files) to be operated on.
  */
-uint8_t  SFEMP3Shield::begin() {
+uint8_t  SFEMP3Shield::begin()
+{
 
 /*
  This test is to assit in the migration from versions prior to 1.01.00.
@@ -137,7 +177,8 @@ if (int8_t(sd.vol()->fatType()) == 0) {
  * \warning Will stop any playing tracks. Check isPlaying() prior to executing, as not to stop on a track.
  * \note use begin() to reinitialize the VS10xx, for use.
  */
-void SFEMP3Shield::end() {
+void SFEMP3Shield::end()
+{
 
   stopTrack(); // Stop and CLOSE any open tracks.
   disableRefill(); // shut down specific interrupts
@@ -170,7 +211,8 @@ void SFEMP3Shield::end() {
  * \see
  * \ref Error_Codes
  */
-uint8_t SFEMP3Shield::vs_init() {
+uint8_t SFEMP3Shield::vs_init()
+{
 
   //Initialize VS1053 chip
     Serial.println("vs_init()");
@@ -273,7 +315,8 @@ uint8_t SFEMP3Shield::vs_init() {
  * - \ref Error_Codes
  * - \ref Plug_Ins
  */
-uint8_t SFEMP3Shield::VSLoadUserCode(char* fileName){
+uint8_t SFEMP3Shield::VSLoadUserCode(char* fileName)
+{
 
   union twobyte val;
   union twobyte addr;
@@ -335,7 +378,8 @@ uint8_t SFEMP3Shield::VSLoadUserCode(char* fileName){
  * \ref Error_Codes
  * \note 9.12.5 New Sine and Sweep Tests was not implemented.
  */
-uint8_t SFEMP3Shield::enableTestSineWave(uint8_t freq) {
+uint8_t SFEMP3Shield::enableTestSineWave(uint8_t freq)
+{
 
   if(isPlaying() || !digitalRead(MP3_RESET)) {
     Serial.println(F("Warning Tests are not available."));
@@ -533,17 +577,92 @@ void SFEMP3Shield::setVolume(uint8_t data) {
  * \param[in] rightchannel writes the right channel master volume
  *
  * Updates the VS10xx SCI_VOL register's left and right master volume level in
- * -0.5 dB Steps. Where maximum volume is 0x0000 and total silence is 0xFEFE.
+ * -0.5 dB Steps. Where maximum volume is 0x0000 and total silence is 0xFEFE (65278).
  * As specified by Data Sheet Section 8.7.11
  *
  * \note input values are -1/2dB. e.g. 40 results in -20dB.
  */
 void SFEMP3Shield::setVolume(uint8_t leftchannel, uint8_t rightchannel){
 
+    if( lcd )
+    {
+        stopInterruptsRAII _obj1;
+        int val = -1 * leftchannel / 2;
+        lcd->setCursor( 10, 0 );
+        lcd->print("      ");
+        lcd->setCursor( 11, 0 );
+        lcd->print( val );
+    }
+    
   VolL = leftchannel;
   VolR = rightchannel;
   Mp3WriteRegister(SCI_VOL, leftchannel, rightchannel);
 }
+
+byte SFEMP3Shield::adjustVolume(uint8_t v)
+{
+    int16_t current = getVolume() & 0xFF;
+    current += v;
+    current = min( current, 255 );
+    current = max( current, 0 );
+    setVolume( (byte)current );
+    return ( (byte)current );
+}
+
+void SFEMP3Shield::nextTrack()
+{
+    playlist->nextTrack();
+}
+void SFEMP3Shield::nextTrackCircular()
+{
+    playlist->nextTrackCircular();
+}
+
+
+void SFEMP3Shield::prevTrack()
+{
+    playlist->prevTrack();
+}
+
+void SFEMP3Shield::adjustTrack( int v )
+{
+    playlist->adjustTrack( v );
+}
+
+void SFEMP3Shield::togglePlayPause()
+{
+    if( getState() == playback)
+    {
+        pauseMusic();
+        if( lcd )
+        {
+            stopInterruptsRAII _obj1;
+            lcd->setCursor( 10, 1 );
+            lcd->print(" PAUSE");
+        }
+    }
+    else if( getState() == paused_playback)
+    {
+        resumeMusic();
+        if( lcd )
+        {
+            stopInterruptsRAII _obj1;
+            lcd->setCursor( 10, 1 );
+            lcd->print("  PLAY");
+        }
+    } 
+}
+
+void SFEMP3Shield::nextPlaylist()
+{
+}
+
+void SFEMP3Shield::prevPlaylist()
+{
+}
+
+
+
 
 //------------------------------------------------------------------------------
 /**
@@ -1730,20 +1849,23 @@ void SFEMP3Shield::refill() {
 
 //    Serial.println("refill(top)");
     
-  while(digitalRead(MP3_DREQ)){
+  while(digitalRead(MP3_DREQ))
+  {
 
-    if(!track.read(mp3DataBuffer, sizeof(mp3DataBuffer))) { //Go out to SD card and try reading 32 new bytes of the song
-      track.close(); //Close out this track
-      playing_state = ready;
+    if(!track.read(mp3DataBuffer, sizeof(mp3DataBuffer)))
+    {
+        //Go out to SD card and try reading 32 new bytes of the song
+        track.close(); //Close out this track
+        playing_state = ready;
 
-      //cancel external interrupt
-      disableRefill();
+        //cancel external interrupt
+        disableRefill();
 
-      flush_cancel(post); //possible mode of "none" for faster response.
+        flush_cancel(post); //possible mode of "none" for faster response.
 
-      //Oh no! There is no data left to read!
-      //Time to exit
-      break;
+        //Oh no! There is no data left to read!
+        //Time to exit
+        break;
     }
 
     // Serial.print("while() we have datas! DREQ:");
@@ -1755,7 +1877,8 @@ void SFEMP3Shield::refill() {
     
     //Once DREQ is released (high) we now feed 32 bytes of data to the VS1053 from our SD read buffer
     dcs_low(); //Select Data
-    for(uint8_t y = 0 ; y < sizeof(mp3DataBuffer) ; y++) {
+    for(uint8_t y = 0 ; y < sizeof(mp3DataBuffer) ; y++)
+    {
       //while(!digitalRead(MP3_DREQ)); // wait until DREQ is or goes high // turns out it is not needed.
       SPI.transfer(mp3DataBuffer[y]); // Send SPI byte
     }
@@ -1998,3 +2121,59 @@ bool isFnMusic(char* filename) {
   }
   return result;
 }
+
+
+///////////////////////////////////////////////
+
+Playlist::Playlist( SFEMP3Shield* _delegate, char** v )
+    : m_delegate( _delegate )
+{
+    playlistIndex = 0;
+    int i=0;
+    while( v[i] )
+    {
+        playlist[ i ] = v[i];
+        playlistMax = i;
+        i++;
+    }
+}
+void Playlist::nextTrack()
+{
+    playlistIndex++;
+    if( !playlist[playlistIndex] )
+        playlistIndex--;
+    Serial << "player:adjustVolume() nextTrack:" << playlist[playlistIndex] << endl;
+    m_delegate->playTrack( playlist[playlistIndex] );
+        
+}
+void Playlist::nextTrackCircular()
+{
+    playlistIndex++;
+    if( !playlist[playlistIndex] )
+        playlistIndex = 0;
+    Serial << "player:adjustVolume() nextTrack:" << playlist[playlistIndex] << endl;
+    m_delegate->playTrack( playlist[playlistIndex] );
+}
+    
+void Playlist::prevTrack()
+{
+    playlistIndex--;
+    if( playlistIndex < 0 )
+        playlistIndex = 0;
+    Serial << "player:adjustVolume() prevTrack:" << playlist[playlistIndex] << endl;
+    m_delegate->playTrack( playlist[playlistIndex] );
+}
+void Playlist::adjustTrack( int v )
+{
+    playlistIndex += v;
+    playlistIndex = min( playlistIndex, playlistMax );
+    playlistIndex = max( playlistIndex, 0 );
+    Serial << "player:adjustVolume() adjustTrack:" << playlist[playlistIndex] << endl;
+    m_delegate->playTrack( playlist[playlistIndex] );
+}
+char* Playlist::getCurrentTrackName() 
+{
+    return playlist[playlistIndex];
+}
+    
+

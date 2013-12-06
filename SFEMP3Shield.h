@@ -12,17 +12,15 @@
 // include libraries:
 #include "SFEMP3ShieldConfig.h"
 #include "SPI.h"
+#include <Streaming.h>
 
-//Not neccessary, but just in case.
-#if ARDUINO > 22
 #include "Arduino.h"
-#else
-#include "WProgram.h"
-#endif
 
 //Add the SdFat Libraries
 #include <SdFat.h>
 #include <SdFatUtil.h>
+
+#include <Shim_CharacterOLEDSPI2.h>
 
 
 /** \brief State of the SFEMP3Shield device
@@ -657,19 +655,54 @@ extern SdFat sd;
  *  /@}
  */
 
+class SFEMP3Shield;
+class Playlist
+{
+    SFEMP3Shield* m_delegate;
+    int playlistIndex;
+    int playlistMax;
+    char* playlist[30];
+  public:
+    Playlist( SFEMP3Shield* _delegate, char** v );
+    void nextTrack();
+    void nextTrackCircular();
+    void prevTrack();
+    void adjustTrack( int v );
+    char* getCurrentTrackName();
+    
+};
+
+
 //------------------------------------------------------------------------------
 /**
  * \class SFEMP3Shield
  * \brief Interface Driver to the VS10xx chip on the SPI.
  */
-class SFEMP3Shield {
+class SFEMP3Shield
+{
+    Shim_CharacterOLEDSPI2* lcd;
+    int playlistIndex;
+    int playlistMax;
+    Playlist* playlists[10];
+    Playlist* playlist;
   public:
+    SFEMP3Shield();
+
+    enum 
+    {
+        VOLUME_MAX = 0,
+        VOLUME_MIN = 0xFEFE, // (65278)
+        LIST_TERMINATOR = 0
+    };
+
+    void setDisplay( Shim_CharacterOLEDSPI2* d );
     uint8_t begin();
     void end();
     uint8_t vs_init();
     void setVolume(uint8_t, uint8_t);
     void setVolume(uint16_t);
     void setVolume(uint8_t);
+    byte adjustVolume(uint8_t);
     void setPlaySpeed(uint16_t);
     uint16_t getPlaySpeed();
     uint16_t getVolume();
@@ -682,6 +715,17 @@ class SFEMP3Shield {
     uint8_t getDifferentialOutput();
     uint8_t playTrack(uint8_t);
     uint8_t playMP3(char*, uint32_t timecode = 0);
+    uint8_t playTrack(char* s, uint32_t timecode = 0)
+    {
+        return playMP3( s, timecode );
+    }
+    void nextTrack();
+    void prevTrack();
+    void adjustTrack( int v );
+    void nextTrackCircular();
+    void togglePlayPause();
+    void nextPlaylist();
+    void prevPlaylist();
     void trackTitle(char*);
     void trackArtist(char*);
     void trackAlbum(char*);
