@@ -920,6 +920,35 @@ uint8_t SFEMP3Shield::playTrack(uint8_t trackNo){
   return playMP3(trackName);
 }
 
+uint8_t SFEMP3Shield::playFile(char* s, uint32_t timecode)
+{
+    stopTrack();
+    uint8_t result = playMP3( s, timecode );
+    if(result != 0) {
+        Serial.print(F("Error code: "));
+        Serial.print(result);
+        Serial.println(F(" when trying to play track"));
+    }
+    else
+    {
+        char title[30]; // buffer to contain the extract the Title from the current filehandles
+        char artist[30]; // buffer to contain the extract the artist name from the current filehandles
+        char album[30]; // buffer to contain the extract the album name from the current filehandles
+        trackTitle((char*)&title);
+        trackArtist((char*)&artist);
+        trackAlbum((char*)&album);
+
+        stopInterruptsRAII _obj1;
+        lcd->clear();
+        lcd->setCursor(0, 0);
+        lcd->print(artist);
+        lcd->setCursor(0, 1);
+        lcd->print(title);
+            
+    }
+    return result;
+}
+
 //------------------------------------------------------------------------------
 /**
  * \brief Begin playing a mp3 file by its filename.
@@ -955,6 +984,14 @@ uint8_t SFEMP3Shield::playMP3(char* fileName, uint32_t timecode) {
 
   Serial.print("playMP3() fn:");
   Serial.println(fileName);
+  if( lcd )
+  {
+        stopInterruptsRAII _obj1;
+        lcd->clear();
+        lcd->setCursor( 0, 0 );
+        lcd->print( fileName );
+  }
+  
   
   //Open the file in read mode.
   if(!track.open(fileName, O_READ)) return 2;
@@ -2136,6 +2173,7 @@ Playlist::Playlist( SFEMP3Shield* _delegate, char** v )
         playlistMax = i;
         i++;
     }
+    playlist[ i ] = 0;
 }
 void Playlist::nextTrack()
 {
@@ -2143,7 +2181,7 @@ void Playlist::nextTrack()
     if( !playlist[playlistIndex] )
         playlistIndex--;
     Serial << "player:adjustVolume() nextTrack:" << playlist[playlistIndex] << endl;
-    m_delegate->playTrack( playlist[playlistIndex] );
+    m_delegate->playFile( playlist[playlistIndex] );
         
 }
 void Playlist::nextTrackCircular()
@@ -2151,8 +2189,8 @@ void Playlist::nextTrackCircular()
     playlistIndex++;
     if( !playlist[playlistIndex] )
         playlistIndex = 0;
-    Serial << "player:adjustVolume() nextTrack:" << playlist[playlistIndex] << endl;
-    m_delegate->playTrack( playlist[playlistIndex] );
+    Serial << "player:nextTrackCircular() nextTrack:" << playlist[playlistIndex] << endl;
+    m_delegate->playFile( playlist[playlistIndex] );
 }
     
 void Playlist::prevTrack()
@@ -2161,7 +2199,7 @@ void Playlist::prevTrack()
     if( playlistIndex < 0 )
         playlistIndex = 0;
     Serial << "player:adjustVolume() prevTrack:" << playlist[playlistIndex] << endl;
-    m_delegate->playTrack( playlist[playlistIndex] );
+    m_delegate->playFile( playlist[playlistIndex] );
 }
 void Playlist::adjustTrack( int v )
 {
@@ -2169,7 +2207,7 @@ void Playlist::adjustTrack( int v )
     playlistIndex = min( playlistIndex, playlistMax );
     playlistIndex = max( playlistIndex, 0 );
     Serial << "player:adjustVolume() adjustTrack:" << playlist[playlistIndex] << endl;
-    m_delegate->playTrack( playlist[playlistIndex] );
+    m_delegate->playFile( playlist[playlistIndex] );
 }
 char* Playlist::getCurrentTrackName() 
 {

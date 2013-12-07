@@ -715,10 +715,7 @@ class SFEMP3Shield
     uint8_t getDifferentialOutput();
     uint8_t playTrack(uint8_t);
     uint8_t playMP3(char*, uint32_t timecode = 0);
-    uint8_t playTrack(char* s, uint32_t timecode = 0)
-    {
-        return playMP3( s, timecode );
-    }
+    uint8_t playFile(char* s, uint32_t timecode = 0);
     void nextTrack();
     void prevTrack();
     void adjustTrack( int v );
