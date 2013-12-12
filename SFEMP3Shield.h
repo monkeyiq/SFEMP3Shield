@@ -20,7 +20,7 @@
 #include <SdFat.h>
 #include <SdFatUtil.h>
 
-#include <Shim_CharacterOLEDSPI2.h>
+#include <Shim_CharacterOLEDSPI3.h>
 
 
 /** \brief State of the SFEMP3Shield device
@@ -680,7 +680,7 @@ class Playlist
  */
 class SFEMP3Shield
 {
-    Shim_CharacterOLEDSPI2* lcd;
+    Shim_CharacterOLEDSPI3* lcd;
     int playlistIndex;
     int playlistMax;
     Playlist* playlists[10];
@@ -695,14 +695,16 @@ class SFEMP3Shield
         LIST_TERMINATOR = 0
     };
 
-    void setDisplay( Shim_CharacterOLEDSPI2* d );
+    void setDisplay( Shim_CharacterOLEDSPI3* d );
+    void showNormalDisplay();
+
     uint8_t begin();
     void end();
     uint8_t vs_init();
     void setVolume(uint8_t, uint8_t);
     void setVolume(uint16_t);
     void setVolume(uint8_t);
-    byte adjustVolume(uint8_t);
+    byte adjustVolume( int8_t );
     void setPlaySpeed(uint16_t);
     uint16_t getPlaySpeed();
     uint16_t getVolume();

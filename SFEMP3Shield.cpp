@@ -100,7 +100,7 @@ SFEMP3Shield::SFEMP3Shield()
 }
 
 void
-SFEMP3Shield::setDisplay( Shim_CharacterOLEDSPI2* d )
+SFEMP3Shield::setDisplay( Shim_CharacterOLEDSPI3* d )
 {
     lcd = d;
 }
@@ -385,34 +385,35 @@ uint8_t SFEMP3Shield::enableTestSineWave(uint8_t freq)
     Serial.println(F("Warning Tests are not available."));
     return -1;
   }
+    return -1;
 
-  uint16_t MP3SCI_MODE = Mp3ReadRegister(SCI_MODE);
-  if(MP3SCI_MODE & SM_TESTS) {
-    return 2;
-  }
+  // uint16_t MP3SCI_MODE = Mp3ReadRegister(SCI_MODE);
+  // if(MP3SCI_MODE & SM_TESTS) {
+  //   return 2;
+  // }
 
-  Mp3WriteRegister(SCI_MODE, MP3SCI_MODE | SM_TESTS);
+  // Mp3WriteRegister(SCI_MODE, MP3SCI_MODE | SM_TESTS);
 
-  for(int y = 0 ; y <= 1 ; y++) { // need to do it twice if it was already done once before
-    //Wait for DREQ to go high indicating IC is available
-    while(!digitalRead(MP3_DREQ)) ;
-    //Select control
-    dcs_low();
-    //SCI consists of instruction byte, address byte, and 16-bit data word.
-    SPI.transfer(0x53);
-    SPI.transfer(0xEF);
-    SPI.transfer(0x6E);
-    SPI.transfer(freq);
-    SPI.transfer(0x00);
-    SPI.transfer(0x00);
-    SPI.transfer(0x00);
-    SPI.transfer(0x00);
-    while(!digitalRead(MP3_DREQ)) ; //Wait for DREQ to go high indicating command is complete
-    dcs_high(); //Deselect Control
-  }
+  // for(int y = 0 ; y <= 1 ; y++) { // need to do it twice if it was already done once before
+  //   //Wait for DREQ to go high indicating IC is available
+  //   while(!digitalRead(MP3_DREQ)) ;
+  //   //Select control
+  //   dcs_low();
+  //   //SCI consists of instruction byte, address byte, and 16-bit data word.
+  //   SPI.transfer(0x53);
+  //   SPI.transfer(0xEF);
+  //   SPI.transfer(0x6E);
+  //   SPI.transfer(freq);
+  //   SPI.transfer(0x00);
+  //   SPI.transfer(0x00);
+  //   SPI.transfer(0x00);
+  //   SPI.transfer(0x00);
+  //   while(!digitalRead(MP3_DREQ)) ; //Wait for DREQ to go high indicating command is complete
+  //   dcs_high(); //Deselect Control
+  // }
 
-  playing_state = testing_sinewave;
-  return 1;
+  // playing_state = testing_sinewave;
+  // return 1;
 }
 
 //------------------------------------------------------------------------------
@@ -432,38 +433,38 @@ uint8_t SFEMP3Shield::enableTestSineWave(uint8_t freq)
  */
 uint8_t SFEMP3Shield::disableTestSineWave() {
 
-  if(isPlaying() || !digitalRead(MP3_RESET)) {
-    Serial.println(F("Warning Tests are not available."));
-    return -1;
-  }
+  // if(isPlaying() || !digitalRead(MP3_RESET)) {
+  //   Serial.println(F("Warning Tests are not available."));
+  //   return -1;
+  // }
 
-  uint16_t MP3SCI_MODE = Mp3ReadRegister(SCI_MODE);
-  if(!(MP3SCI_MODE & SM_TESTS)) {
-    return 0;
-  }
+  // uint16_t MP3SCI_MODE = Mp3ReadRegister(SCI_MODE);
+  // if(!(MP3SCI_MODE & SM_TESTS)) {
+  //   return 0;
+  // }
 
-  //Wait for DREQ to go high indicating IC is available
-  while(!digitalRead(MP3_DREQ)) ;
-  //Select control
-  dcs_low();
+  // //Wait for DREQ to go high indicating IC is available
+  // while(!digitalRead(MP3_DREQ)) ;
+  // //Select control
+  // dcs_low();
 
-  //SDI consists of instruction byte, address byte, and 16-bit data word.
-  SPI.transfer(0x45);
-  SPI.transfer(0x78);
-  SPI.transfer(0x69);
-  SPI.transfer(0x74);
-  SPI.transfer(0x00);
-  SPI.transfer(0x00);
-  SPI.transfer(0x00);
-  SPI.transfer(0x00);
-  while(!digitalRead(MP3_DREQ)) ; //Wait for DREQ to go high indicating command is complete
+  // //SDI consists of instruction byte, address byte, and 16-bit data word.
+  // SPI.transfer(0x45);
+  // SPI.transfer(0x78);
+  // SPI.transfer(0x69);
+  // SPI.transfer(0x74);
+  // SPI.transfer(0x00);
+  // SPI.transfer(0x00);
+  // SPI.transfer(0x00);
+  // SPI.transfer(0x00);
+  // while(!digitalRead(MP3_DREQ)) ; //Wait for DREQ to go high indicating command is complete
 
-  dcs_high(); //Deselect Control
+  // dcs_high(); //Deselect Control
 
-  // turn test mode bit off
-  Mp3WriteRegister(SCI_MODE, Mp3ReadRegister(SCI_MODE) & ~SM_TESTS);
+  // // turn test mode bit off
+  // Mp3WriteRegister(SCI_MODE, Mp3ReadRegister(SCI_MODE) & ~SM_TESTS);
 
-  playing_state = ready;
+  // playing_state = ready;
   return 0;
 }
 
@@ -588,10 +589,15 @@ void SFEMP3Shield::setVolume(uint8_t leftchannel, uint8_t rightchannel){
     {
         stopInterruptsRAII _obj1;
         int val = -1 * leftchannel / 2;
-        lcd->setCursor( 10, 0 );
-        lcd->print("      ");
-        lcd->setCursor( 11, 0 );
-        lcd->print( val );
+        char buf[10];
+        snprintf(buf,9," %.3d db ", val );
+        lcd->setCursor( 8, 0 );
+        lcd->print( buf );
+         
+        // lcd->setCursor( 10, 0 );
+        // lcd->print("       ");
+        // lcd->setCursor( 11, 0 );
+        // lcd->print( val );
     }
     
   VolL = leftchannel;
@@ -599,12 +605,14 @@ void SFEMP3Shield::setVolume(uint8_t leftchannel, uint8_t rightchannel){
   Mp3WriteRegister(SCI_VOL, leftchannel, rightchannel);
 }
 
-byte SFEMP3Shield::adjustVolume(uint8_t v)
+byte SFEMP3Shield::adjustVolume( int8_t v )
 {
+    Serial << "adjustVolume() v:" << v << endl;
     int16_t current = getVolume() & 0xFF;
     current += v;
     current = min( current, 255 );
     current = max( current, 0 );
+    Serial << "adjustVolume() v:" << v << " current:" << current << endl;
     setVolume( (byte)current );
     return ( (byte)current );
 }
@@ -920,17 +928,8 @@ uint8_t SFEMP3Shield::playTrack(uint8_t trackNo){
   return playMP3(trackName);
 }
 
-uint8_t SFEMP3Shield::playFile(char* s, uint32_t timecode)
+void SFEMP3Shield::showNormalDisplay()
 {
-    stopTrack();
-    uint8_t result = playMP3( s, timecode );
-    if(result != 0) {
-        Serial.print(F("Error code: "));
-        Serial.print(result);
-        Serial.println(F(" when trying to play track"));
-    }
-    else
-    {
         char title[30]; // buffer to contain the extract the Title from the current filehandles
         char artist[30]; // buffer to contain the extract the artist name from the current filehandles
         char album[30]; // buffer to contain the extract the album name from the current filehandles
@@ -944,7 +943,20 @@ uint8_t SFEMP3Shield::playFile(char* s, uint32_t timecode)
         lcd->print(artist);
         lcd->setCursor(0, 1);
         lcd->print(title);
-            
+}
+
+uint8_t SFEMP3Shield::playFile(char* s, uint32_t timecode)
+{
+    stopTrack();
+    uint8_t result = playMP3( s, timecode );
+    if(result != 0) {
+        Serial.print(F("Error code: "));
+        Serial.print(result);
+        Serial.println(F(" when trying to play track"));
+    }
+    else
+    {
+        showNormalDisplay();
     }
     return result;
 }
