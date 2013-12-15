@@ -656,14 +656,41 @@ extern SdFat sd;
  */
 
 class SFEMP3Shield;
+
+/**
+ * The first track is number 1. This leaves 100 bytes
+ * at track '0' as metadata.
+ */
 class Playlist
 {
+    uint8_t Spi23LC1024Read8(uint32_t address);
+    void Spi23LC1024Write8(uint32_t address, uint8_t data_byte);
+    
     SFEMP3Shield* m_delegate;
+    enum 
+    {
+        filenamesz = 13,
+        tracknumsz = 5,
+        titlesz    = 40,
+        artistsz   = 40
+    };
+  public:
+    char trackInfo[100];
+    char* filename;
+    char* tracknum;
+    char* title;
+    char* artist;
     int playlistIndex;
     int playlistMax;
-    char* playlist[30];
-  public:
-    Playlist( SFEMP3Shield* _delegate, char** v );
+
+    void setTrackNum( int v );
+    void ramcs_low();
+    void ramcs_high();
+
+    Playlist( SFEMP3Shield* _delegate, const char* _filename );
+    int  readEntirePlayListFromSDCardToRAM();
+    void setFilename( const char* _filename );
+    
     void nextTrack();
     void nextTrackCircular();
     void prevTrack();
@@ -767,7 +794,7 @@ class SFEMP3Shield
     static void enableRefill();
     static void disableRefill();
     void getBitRateFromMP3File(char*);
-    uint8_t VSLoadUserCode(char*);
+    uint8_t VSLoadUserCode(const char*);
 
     //Create the variables to be used by SdFat Library
 
