@@ -7,10 +7,18 @@
 */
 
 
+//#undef  USE_MP3_REFILL_MEANS
+//#define USE_MP3_REFILL_MEANS USE_MP3_Timer1
+//#define USE_MP3_REFILL_MEANS USE_MP3_SimpleTimer
+
 
 #include "SFEMP3Shield.h"
 #include "SPI.h"
 #include <avr/pgmspace.h>
+
+int m_screenRefreshTimerID = 0;
+SFEMP3Shield* singleton = 0;
+
 
 const byte ramcs = 4;
 
@@ -87,13 +95,13 @@ uint8_t  SFEMP3Shield::mp3DataBuffer[32];
 
 
 SFEMP3Shield::SFEMP3Shield()
-    :
-    lcd( 0 )
+    : lcd( 0 )
+    , m_timer(0)
 {
+    singleton = this;
+    
     playlistIndex = 0;
     playlistMax = 0;
-
-    
 }
 
 void
@@ -101,6 +109,44 @@ SFEMP3Shield::setDisplay( Shim_CharacterOLEDSPI3* d )
 {
     lcd = d;
 }
+
+
+void
+SFEMP3Shield::setTimer( SimpleTimer* t )
+{
+    m_timer = t;
+}
+
+void ScreenRefresherTimer()
+{
+    m_screenRefreshTimerID = 0;
+    
+    byte playing = singleton->isPlaying();
+    if( playing )
+        singleton->disableRefill();
+    singleton->showNormalDisplay();
+
+    if( playing )
+        singleton->enableRefill();
+    
+}
+
+void
+SFEMP3Shield::touchScreenRefresherTimer()
+{
+    if( m_timer )
+    {
+        if( m_screenRefreshTimerID )
+            m_timer->restartTimer(m_screenRefreshTimerID);
+        else
+        {
+            m_screenRefreshTimerID = m_timer->setTimeout( 4000, ScreenRefresherTimer );
+        }
+    }
+    
+}
+
+
 
 
 
@@ -125,6 +171,7 @@ SFEMP3Shield::setDisplay( Shim_CharacterOLEDSPI3* d )
  */
 uint8_t  SFEMP3Shield::begin()
 {
+    SPI.setClockDivider(SPI_CLOCK_DIV4);
     playlists[0] = new Playlist( this, "playls1.lst" );
     playlists[1] = 0;
     playlist = playlists[ playlistIndex ];
@@ -154,11 +201,13 @@ if (int8_t(sd.vol()->fatType()) == 0) {
 
   playing_state = initialized;
 
+  
   uint8_t result = vs_init();
   if(result) {
     return result;
   }
 
+  
 #if defined(USE_MP3_REFILL_MEANS) && USE_MP3_REFILL_MEANS == USE_MP3_Timer1
   Timer1.initialize(MP3_REFILL_PERIOD);
 #elif defined(USE_MP3_REFILL_MEANS) && USE_MP3_REFILL_MEANS == USE_MP3_SimpleTimer
@@ -268,6 +317,7 @@ uint8_t SFEMP3Shield::vs_init()
   Mp3WriteRegister(SCI_CLOCKF, 0x6000); //Set multiplier to 3.0x
   //Internal clock multiplier is now 3x.
   //Therefore, max SPI speed is 52MgHz.
+  spiRate = SPI_CLOCK_DIV2; //use safe SPI rate of (16MHz / 4 = 4MHz)
   spiRate = SPI_CLOCK_DIV4; //use safe SPI rate of (16MHz / 4 = 4MHz)
 //  spiRate = SPI_CLOCK_DIV16; //use safe SPI rate of (16MHz / 4 = 4MHz)
   delay(10); // settle time
@@ -652,14 +702,21 @@ void SFEMP3Shield::togglePlayPause()
     }
     else if( getState() == paused_playback)
     {
-        resumeMusic();
         if( lcd )
         {
 //            stopInterruptsRAII _obj1;
             lcd->setCursor( 10, 1 );
             lcd->print("  PLAY");
+            delay(100);
         }
-    } 
+        resumeMusic();
+    }
+    else
+    {
+        showNormalDisplay();
+        playFile( playlist->filename );
+    }
+    
 }
 
 void SFEMP3Shield::nextPlaylist()
@@ -931,33 +988,26 @@ uint8_t SFEMP3Shield::playTrack(uint8_t trackNo)
 
 void SFEMP3Shield::showNormalDisplay()
 {
-        char title[30]; // buffer to contain the extract the Title from the current filehandles
-        char artist[30]; // buffer to contain the extract the artist name from the current filehandles
-        char album[30]; // buffer to contain the extract the album name from the current filehandles
-        trackTitle((char*)&title);
-        trackArtist((char*)&artist);
-        trackAlbum((char*)&album);
-
 //        stopInterruptsRAII _obj1;
         lcd->clear();
         lcd->setCursor(0, 0);
-        lcd->print(artist);
+        lcd->print(playlist->artist);
         lcd->setCursor(0, 1);
-        lcd->print(title);
+        lcd->print(playlist->title);
+        Serial.println("showNormalDisplay()");
+        Serial.println(playlist->artist);
+        Serial.println(playlist->title);
 }
 
 uint8_t SFEMP3Shield::playFile(char* s, uint32_t timecode)
 {
     stopTrack();
+    showNormalDisplay();
     uint8_t result = playMP3( s, timecode );
     if(result != 0) {
         Serial.print(F("Error code: "));
         Serial.print(result);
         Serial.println(F(" when trying to play track"));
-    }
-    else
-    {
-        showNormalDisplay();
     }
     return result;
 }
@@ -995,7 +1045,7 @@ uint8_t SFEMP3Shield::playMP3(char* fileName, uint32_t timecode) {
   if(isPlaying()) return 1;
   if(!digitalRead(MP3_RESET)) return 3;
 
-  disableRefill();
+//  disableRefill();
   Serial.print(F("playMP3() fn:"));
   Serial.println(fileName);
   delay(200);
@@ -1045,7 +1095,7 @@ uint8_t SFEMP3Shield::playMP3(char* fileName, uint32_t timecode) {
   delay(200);
   
   //gotta start feeding that hungry mp3 chip
-  refill();
+//  refill();
 
   //attach refill interrupt off DREQ line, pin 2
   enableRefill();
@@ -2214,12 +2264,14 @@ void
 Playlist::ramcs_low()
 {
     digitalWrite( ramcs, LOW );
+    delay(10);
 }
 
 void
 Playlist::ramcs_high()
 {
     digitalWrite( ramcs, HIGH );
+    delay(10);
 }
 
 //Byte transfer functions
@@ -2254,6 +2306,10 @@ Playlist::readEntirePlayListFromSDCardToRAM()
     int idx=0;
     SdFile f;
 
+    ramcs_low();
+    delay(200);
+    ramcs_high();
+    
     if(!f.open( filename, O_READ ))
     {
         Serial.println(F("Can't load playlist file!"));
@@ -2270,30 +2326,38 @@ Playlist::readEntirePlayListFromSDCardToRAM()
     {
         if( idx == 0 )
         {
-//            Serial.println("data...");
-//            Serial.println((int)mp3DataBuffer[0]);
-//            Serial.println((int)mp3DataBuffer[1]);
-//            delay(200);
+           Serial.println("data from card...");
+           Serial.println((int)mp3DataBuffer[0]);
+           Serial.println((int)mp3DataBuffer[1]);
+           delay(200);
         }
         idx++;
-//        ramcs_low();
-//        SPI.transfer(WRITE);
-//        SPI.transfer((uint8_t)(address >> 16) & 0xff);
-//        SPI.transfer((uint8_t)(address >> 8) & 0xff);
-//        SPI.transfer((uint8_t)address);
+       ramcs_low();
+       SPI.transfer(WRITE);
+       SPI.transfer((uint8_t)(address >> 16) & 0xff);
+       SPI.transfer((uint8_t)(address >> 8) & 0xff);
+       SPI.transfer((uint8_t)address);
+       for( i=0; i < 32; i++ )
+           SPI.transfer(mp3DataBuffer[i]);
+       ramcs_high();
 //        for( i=0; i < 32; i++ )
-//            SPI.transfer(mp3DataBuffer[i]);
-        for( i=0; i < 32; i++ )
-            Spi23LC1024Write8( address+i, mp3DataBuffer[i] );
+//            Spi23LC1024Write8( address+i, mp3DataBuffer[i] );
 
         
-//        ramcs_high();
         address += 32;
 
         if( idx==1)
         {
+            
 //            Spi23LC1024Write8( 0, mp3DataBuffer[0] );
 //            Spi23LC1024Write8( 1, mp3DataBuffer[1] );
+
+    Serial.println(F("looping, raw bytes from spi ram..."));
+    byte b = 0;
+    b = Spi23LC1024Read8(0);
+    Serial.println((int)b);
+    b = Spi23LC1024Read8(1);
+    Serial.println((int)b);
             
         }
     }
@@ -2305,12 +2369,12 @@ Playlist::readEntirePlayListFromSDCardToRAM()
     playlistMax = 0;
     playlistMax = trackInfo[1]<<8 | trackInfo[0];
 
-    Serial.print(F("max track#"));
+    Serial.print(F("max track# from spi ram"));
     Serial.println(playlistMax);
     Serial.println((int)trackInfo[0]);
     Serial.println((int)trackInfo[1]);
 
-    Serial.println(F("bytes..."));
+    Serial.println(F("raw bytes from spi ram..."));
     byte b = 0;
     b = Spi23LC1024Read8(0);
     Serial.println((int)b);
@@ -2330,6 +2394,7 @@ Playlist::readEntirePlayListFromSDCardToRAM()
 void
 Playlist::setTrackNum( int v )
 {
+    m_delegate->stopTrack();
     Serial.print("setTrackNum() v:"); Serial.println(v);
     delay(200);
     
@@ -2338,21 +2403,21 @@ Playlist::setTrackNum( int v )
     
     uint32_t address = v * 100;
     
+//    byte idx = 0;
+//    for( idx = 0; idx < 100; idx++ )
+//        trackInfo[ idx ] = Spi23LC1024Read8(address++);
+
+   ramcs_low();
+    
+    SPI.transfer(READ);
+    SPI.transfer((uint8_t)(address >> 16) & 0xff);
+    SPI.transfer((uint8_t)(address >> 8) & 0xff);
+    SPI.transfer((uint8_t)address);
     byte idx = 0;
     for( idx = 0; idx < 100; idx++ )
-        trackInfo[ idx ] = Spi23LC1024Read8(address++);
+        trackInfo[ idx ] = SPI.transfer(0x0);
 
-//    ramcs_low();
-    
-    // SPI.transfer(READ);
-    // SPI.transfer((uint8_t)(address >> 16) & 0xff);
-    // SPI.transfer((uint8_t)(address >> 8) & 0xff);
-    // SPI.transfer((uint8_t)address);
-    // byte idx = 0;
-    // for( idx = 0; idx < 100; idx++ )
-    //     trackInfo[ idx ] = SPI.transfer(0x0);
-
-//    ramcs_high();
+   ramcs_high();
 
     tracknum = &trackInfo[ 0 + filenamesz ];
     title    = &trackInfo[ 0 + filenamesz + tracknumsz ];

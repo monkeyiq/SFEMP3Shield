@@ -226,6 +226,7 @@ Support for Arduino Leonardo is afflicted by having the SPI pins not routing the
  * Coping the file is not enough.
  */
 #define USE_MP3_REFILL_MEANS USE_MP3_INTx
+//#define USE_MP3_REFILL_MEANS USE_MP3_SimpleTimer
 
 /*
  * Configure the implemented means of Refilling the VS10xx chip

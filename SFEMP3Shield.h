@@ -13,6 +13,7 @@
 #include "SFEMP3ShieldConfig.h"
 #include "SPI.h"
 #include <Streaming.h>
+#include <SimpleTimer.h>
 
 #include "Arduino.h"
 
@@ -21,6 +22,8 @@
 #include <SdFatUtil.h>
 
 #include <Shim_CharacterOLEDSPI3.h>
+
+void ScreenRefresherTimer();
 
 
 /** \brief State of the SFEMP3Shield device
@@ -707,7 +710,10 @@ class Playlist
  */
 class SFEMP3Shield
 {
+    friend void ScreenRefresherTimer();
+
     Shim_CharacterOLEDSPI3* lcd;
+    SimpleTimer* m_timer;
     int playlistIndex;
     int playlistMax;
     Playlist* playlists[10];
@@ -724,6 +730,9 @@ class SFEMP3Shield
 
     void setDisplay( Shim_CharacterOLEDSPI3* d );
     void showNormalDisplay();
+    void setTimer( SimpleTimer* t );
+    void touchScreenRefresherTimer();
+    
 
     uint8_t begin();
     void end();
