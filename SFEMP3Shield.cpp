@@ -17,7 +17,8 @@
 #include <avr/pgmspace.h>
 
 int m_screenRefreshTimerID = 0;
-SFEMP3Shield* singleton = 0;
+extern SFEMP3Shield MP3player;
+extern SimpleTimer timer;
 
 
 const byte ramcs = 4;
@@ -96,10 +97,7 @@ uint8_t  SFEMP3Shield::mp3DataBuffer[32];
 
 SFEMP3Shield::SFEMP3Shield()
     : lcd( 0 )
-    , m_timer(0)
 {
-    singleton = this;
-    
     playlistIndex = 0;
     playlistMax = 0;
 }
@@ -111,38 +109,28 @@ SFEMP3Shield::setDisplay( Shim_CharacterOLEDSPI3* d )
 }
 
 
-void
-SFEMP3Shield::setTimer( SimpleTimer* t )
-{
-    m_timer = t;
-}
 
 void ScreenRefresherTimer()
 {
     m_screenRefreshTimerID = 0;
     
-    byte playing = singleton->isPlaying();
+    byte playing = MP3player.isPlaying();
     if( playing )
-        singleton->disableRefill();
-    singleton->showNormalDisplay();
+        MP3player.disableRefill();
+    MP3player.showNormalDisplay();
 
     if( playing )
-        singleton->enableRefill();
+        MP3player.enableRefill();
     
 }
 
 void
 SFEMP3Shield::touchScreenRefresherTimer()
 {
-    if( m_timer )
-    {
-        if( m_screenRefreshTimerID )
-            m_timer->restartTimer(m_screenRefreshTimerID);
-        else
-        {
-            m_screenRefreshTimerID = m_timer->setTimeout( 4000, ScreenRefresherTimer );
-        }
-    }
+    if( m_screenRefreshTimerID )
+        timer.restartTimer(m_screenRefreshTimerID);
+    else
+        m_screenRefreshTimerID = timer.setTimeout( 4000, ScreenRefresherTimer );
     
 }
 
@@ -2472,5 +2460,21 @@ char* Playlist::getCurrentTrackName()
 {
     return title;
 }
-    
+
+////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////
+
+SFEMP3ShieldNoINTRAII::SFEMP3ShieldNoINTRAII()
+{
+    playing = MP3player.isPlaying();
+    if( playing )
+        MP3player.disableRefill();
+}
+
+SFEMP3ShieldNoINTRAII::~SFEMP3ShieldNoINTRAII()
+{
+    if( playing )
+        MP3player.enableRefill();
+}
 

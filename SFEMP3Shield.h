@@ -24,7 +24,7 @@
 #include <Shim_CharacterOLEDSPI3.h>
 
 void ScreenRefresherTimer();
-
+class SFEMP3ShieldNoINTRAII;
 
 /** \brief State of the SFEMP3Shield device
  *
@@ -711,11 +711,11 @@ class Playlist
 class SFEMP3Shield
 {
     friend void ScreenRefresherTimer();
-
+    friend class SFEMP3ShieldNoINTRAII;
+    
     Shim_CharacterOLEDSPI3* lcd;
-    SimpleTimer* m_timer;
-    int playlistIndex;
-    int playlistMax;
+    byte playlistIndex;
+    byte playlistMax;
     Playlist* playlists[10];
     Playlist* playlist;
   public:
@@ -730,7 +730,6 @@ class SFEMP3Shield
 
     void setDisplay( Shim_CharacterOLEDSPI3* d );
     void showNormalDisplay();
-    void setTimer( SimpleTimer* t );
     void touchScreenRefresherTimer();
     
 
@@ -872,5 +871,15 @@ union twobyte {
  */
   uint8_t  byte[2];
 } ;
+
+
+class SFEMP3ShieldNoINTRAII
+{
+    bool playing;
+  public:
+    SFEMP3ShieldNoINTRAII();
+    ~SFEMP3ShieldNoINTRAII();
+};
+
 
 #endif // SFEMP3Shield_h

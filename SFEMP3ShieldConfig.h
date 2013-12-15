@@ -52,54 +52,6 @@ Support for Arduino Leonardo is afflicted by having the SPI pins not routing the
 #define SFEMP3ShieldConfig_h
 
 //------------------------------------------------------------------------------
-
-/**
- * \def SEEEDUINO
- * \brief A macro to configure use on a Seeeduino MP3 player shield
- *
- * Seeduino MP3 Players is supported. However, its DREQ is not connected to a
- * hard INT(x) pin, hence it MUST be polled. This can be configured, using
- * USE_MP3_SimpleTimer.
- * When using a Seeeduino MP3 Player shield set the below define of SEEEDUINO
- * to 1. As so the correct IO pins are configured MP3_XCS, MP3_XDCS and MP3_DREQ
- *
- * Along with USE_MP3_REFILL_MEANS should not be USE_MP3_INTx, unless extra
- * jumper wires are used.
- *
- * Set \c SEEEDUINO to \c 0 to use on a SparkFun MP3 player shield
- *
- * Set \c SEEEDUINO to \c 1 to use on a Seeeduino MP3 player shield
- */
-#define SEEEDUINO 0 // uncomment if using the Seeeduino Music Shield
-
-/**
- * \def GRAVITECH
- * \brief A macro to configure use on a Gravitech's MP3-4NANO shield
- *
- * Gravitech's MP3-4NANO shield is supported. However, its chip select of the
- * SdCard connected to D4. This can be configured, simply by setting the below
- * define of GRAVITECH to 1.
- *
- * Set \c GRAVITECH to \c 0 to use on a Gravitech's MP3-4NANO shield
- *
- * Set \c GRAVITECH to \c 1 to use on a Gravitech's MP3-4NANO
- */
-#define GRAVITECH 0 // uncomment if using the Gravitech's MP3-4NANO shield
-
-/**
- * \def TEENSY2
- * \brief Macro to configure pins for connecting the Sparkfun shield to a Teensy 2
- *
- * You can connect the Sparkfun Mp3 shield to a Teensy 2 with jumper cables on a
- * breadboard. Teensy SDI pins are CS=0, SCK=1, MOSI=2, MISO=3. If you are using
- * a Teensy 2 then set TEENSY2 to 1 below and scroll down for pin assignments.
- *
- * Set \c TEENSY2 to \c 0 to use on a Gravitech's MP3-4NANO shield
- *
- * Set \c TEENSY2 to \c 1 to use on a Gravitech's MP3-4NANO
- */
-#define TEENSY2 0 // set to 1 if using the Sparkfun Mp3 shield with Teensy 2
-
 //------------------------------------------------------------------------------
 /*
  * MP3 Player Shield pin mapping. See the appropiate schematic
@@ -160,47 +112,16 @@ Support for Arduino Leonardo is afflicted by having the SPI pins not routing the
 
 #include <pins_arduino.h>
 
-#if defined(__BIOFEEDBACK_MEGA__)
-  #define MP3_XCS             67      //PK5 Output, Active Low,  Control Chip Select Pin (for accessing SPI Control/Status registers)
-  #define MP3_XDCS            68      //PK6 Output, Active Low,  Data Chip Select / BSYNC Pin
-  #define MP3_DREQ            66      //PK4 Input , Active High, Data Request Pin: Player asks for more data
-  #define MP3_RESET           65      //PK3 Output, Active Low,  Reset is active low
-  #define SD_SEL              76      //PJ6 Output, Active Low
-  #define MP3_DREQINT          5 //Corresponding INTx for DREQ pin
-#elif ( SEEEDUINO == 1 ) // if SEEDUINO use the following pin outs
-  #define MP3_XCS             A3 //Control Chip Select Pin (for accessing SPI Control/Status registers)
-  #define MP3_XDCS            A2 //Data Chip Select / BSYNC Pin
-  #define MP3_DREQ            A1 //Data Request Pin: Player asks for more data
-  //#define MP3_DREQINT        0 // There is no IRQ used on Seeduino
-  #define MP3_RESET           A0 //Reset is active low
-  #define SD_SEL              10 //select pin for SD card
-#elif ( TEENSY2 == 1 )
-  #define MP3_XCS              7
-  #define MP3_XDCS             8
-  #define MP3_DREQ             4
-  #define MP3_DREQINT          1
-  #define MP3_RESET            9
-  #define SD_SEL               0 // Teensy SDI CS on pin 0
-  // Connect SDI pins as follows:
-  // Sparkfun shield 11 -> Teensy 2 (mosi)
-  // Sparkfun shield 12 -> Teensy 3 (miso)
-  // Sparkfun shield 13 -> Teensy 1 (sck)
-#else // otherwise use pinout of typical Sparkfun MP3 Player Shield.
-  #define MP3_XCS              6 //Control Chip Select Pin (for accessing SPI Control/Status registers)
-  #define MP3_XDCS             7 //Data Chip Select / BSYNC Pin
-  #define MP3_DREQ             2 //Data Request Pin: Player asks for more data
-  #if defined(__AVR_ATmega32U4__)
-    #define MP3_DREQINT          1 //Corresponding INTx for DREQ pin
-  #else // swapped between Uno and Leonardo.
-    #define MP3_DREQINT          0 //Corresponding INTx for DREQ pin
-  #endif
-  #define MP3_RESET            8 //Reset is active low
-  #if ( GRAVITECH == 1 )
-    #define SD_SEL               4 //select pin for SD card
-  #else
-    #define SD_SEL               9 //select pin for SD card
-  #endif // GRAVITECH
-#endif // none SEEEDUINO
+#define MP3_XCS              6 //Control Chip Select Pin (for accessing SPI Control/Status registers)
+#define MP3_XDCS             7 //Data Chip Select / BSYNC Pin
+#define MP3_DREQ             2 //Data Request Pin: Player asks for more data
+#if defined(__AVR_ATmega32U4__)
+#define MP3_DREQINT          1 //Corresponding INTx for DREQ pin
+#else // swapped between Uno and Leonardo.
+#define MP3_DREQINT          0 //Corresponding INTx for DREQ pin
+#endif
+#define MP3_RESET            8 //Reset is active low
+#define SD_SEL               9 //select pin for SD card
 
 //------------------------------------------------------------------------------
 /**
