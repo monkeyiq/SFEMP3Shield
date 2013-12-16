@@ -19,9 +19,12 @@
 int m_screenRefreshTimerID = 0;
 extern SFEMP3Shield MP3player;
 extern SimpleTimer timer;
+extern MCPWriter writer;
 
+extern byte outputWire_ramChipSelect;
 
-const byte ramcs = 4;
+ChipSelect ramcs( &writer, outputWire_ramChipSelect );
+
 
 class stopInterruptsRAII
 {
@@ -112,6 +115,7 @@ SFEMP3Shield::setDisplay( Shim_CharacterOLEDSPI3* d )
 
 void ScreenRefresherTimer()
 {
+    Serial << F("ScreenRefresherTimer") << endl;
     m_screenRefreshTimerID = 0;
     
     byte playing = MP3player.isPlaying();
@@ -127,6 +131,7 @@ void ScreenRefresherTimer()
 void
 SFEMP3Shield::touchScreenRefresherTimer()
 {
+    Serial << F("touchScreenRefresherTimer") << endl;
     if( m_screenRefreshTimerID )
         timer.restartTimer(m_screenRefreshTimerID);
     else
@@ -179,6 +184,8 @@ if (int8_t(sd.vol()->fatType()) == 0) {
 #endif
 
   pinMode(MP3_DREQ, INPUT);
+//  writer.digitalWrite( MP3_XCS, HIGH );
+//  writer.digitalWrite( MP3_XDCS, HIGH );
   pinMode(MP3_XCS, OUTPUT);
   pinMode(MP3_XDCS, OUTPUT);
   pinMode(MP3_RESET, OUTPUT);
@@ -314,12 +321,16 @@ uint8_t SFEMP3Shield::vs_init()
   int MP3Clock = Mp3ReadRegister(SCI_CLOCKF);
   if(MP3Clock != 0x6000) return 5;
 
+  Serial.print(F("...2"));
   setVolume(40, 40);
   // one would think the following patch would over write the volume.
   // But the SCI_VOL register space is not in the VSdsp's WRAM space.
   // Note to keep an eye on it for future patches.
 
+  Serial.print(F("...3"));
+  SPI.setClockDivider(SPI_CLOCK_DIV4);
   if(VSLoadUserCode("patches.053")) return 6;
+  Serial.print(F("...4"));
 
   delay(100); // just a good idea to let settle.
 
@@ -626,10 +637,10 @@ void SFEMP3Shield::setVolume(uint8_t leftchannel, uint8_t rightchannel){
 
     if( lcd )
     {
-//        stopInterruptsRAII _obj1;
         int val = -1 * leftchannel / 2;
         char buf[10];
         snprintf(buf,9," %.3d db ", val );
+        SFEMP3ShieldNoINTRAII _obj1;
         lcd->setCursor( 8, 0 );
         lcd->print( buf );
          
@@ -698,6 +709,7 @@ void SFEMP3Shield::togglePlayPause()
             delay(100);
         }
         resumeMusic();
+        touchScreenRefresherTimer();
     }
     else
     {
@@ -1718,6 +1730,7 @@ void SFEMP3Shield::setBitRate(uint16_t bitr){
 void SFEMP3Shield::cs_low() {
   SPI.setDataMode(SPI_MODE0);
   SPI.setClockDivider(spiRate); //Set SPI bus speed to 1MHz (16MHz / 16 = 1MHz)
+//  writer.digitalWrite( MP3_XCS, LOW );  
   digitalWrite(MP3_XCS, LOW);
 }
 
@@ -1729,6 +1742,7 @@ void SFEMP3Shield::cs_low() {
  * defined by MP3_XCS.
  */
 void SFEMP3Shield::cs_high() {
+//  writer.digitalWrite( MP3_XCS, HIGH );  
   digitalWrite(MP3_XCS, HIGH);
 }
 
@@ -1743,6 +1757,7 @@ void SFEMP3Shield::cs_high() {
 void SFEMP3Shield::dcs_low() {
   SPI.setDataMode(SPI_MODE0);
   SPI.setClockDivider(spiRate); //Set SPI bus speed to 1MHz (16MHz / 16 = 1MHz)
+//  writer.digitalWrite( MP3_XDCS, LOW );
   digitalWrite(MP3_XDCS, LOW);
 }
 
@@ -1754,6 +1769,7 @@ void SFEMP3Shield::dcs_low() {
  * defined by MP3_XDCS.
  */
 void SFEMP3Shield::dcs_high() {
+//  writer.digitalWrite( MP3_XDCS, HIGH );  
   digitalWrite(MP3_XDCS, HIGH);
 }
 
@@ -1949,7 +1965,7 @@ void SFEMP3Shield::refill() {
 
 //    Serial.println("refill(top)");
     
-  while(digitalRead(MP3_DREQ))
+  while(digitalRead(MP3_DREQ)) 
   {
 
     if(!track.read(mp3DataBuffer, sizeof(mp3DataBuffer)))
@@ -2239,7 +2255,6 @@ Playlist::Playlist( SFEMP3Shield* _delegate, const char* _filename )
     title    = &trackInfo[ 0 + filenamesz + tracknumsz ];
     artist   = &trackInfo[ 0 + filenamesz + tracknumsz + titlesz ];
 
-    pinMode( ramcs, OUTPUT );
 }
 
 void
@@ -2251,14 +2266,14 @@ Playlist::setFilename( const char* _filename )
 void
 Playlist::ramcs_low()
 {
-    digitalWrite( ramcs, LOW );
+    ramcs.low();
     delay(10);
 }
 
 void
 Playlist::ramcs_high()
 {
-    digitalWrite( ramcs, HIGH );
+    ramcs.hi();
     delay(10);
 }
 
