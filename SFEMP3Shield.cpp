@@ -100,7 +100,7 @@ uint8_t  SFEMP3Shield::mp3DataBuffer[32];
 
 SFEMP3Shield::SFEMP3Shield()
     : lcd( 0 )
-    , m_playlist( this, "playls1.lst" )
+    , m_playlist( new Playlist( this, "playls1.lst" ))
     , m_finishedPlayingSong( 0 )
 
 {
@@ -187,8 +187,8 @@ uint8_t  SFEMP3Shield::begin()
     }
     
     SPI.setClockDivider(SPI_CLOCK_DIV4);
-    m_playlist.setPlaylistNumber( 1 );
-    m_playlist.readEntirePlayListFromSDCardToRAM();
+    m_playlist->setPlaylistNumber( 1 );
+    m_playlist->readEntirePlayListFromSDCardToRAM();
 
 /*
  This test is to assit in the migration from versions prior to 1.01.00.
@@ -689,22 +689,22 @@ byte SFEMP3Shield::adjustVolume( int8_t v )
 
 void SFEMP3Shield::nextTrack()
 {
-    m_playlist.nextTrack();
+    m_playlist->nextTrack();
 }
 void SFEMP3Shield::nextTrackCircular()
 {
-    m_playlist.nextTrackCircular();
+    m_playlist->nextTrackCircular();
 }
 
 
 void SFEMP3Shield::prevTrack()
 {
-    m_playlist.prevTrack();
+    m_playlist->prevTrack();
 }
 
 void SFEMP3Shield::adjustTrack( int v )
 {
-    m_playlist.adjustTrack( v );
+    m_playlist->adjustTrack( v );
 }
 
 void SFEMP3Shield::togglePlayPause()
@@ -734,7 +734,7 @@ void SFEMP3Shield::togglePlayPause()
     else
     {
         showNormalDisplay();
-        playFile( m_playlist.filename );
+        playFile( m_playlist->filename );
     }
     
 }
@@ -744,9 +744,16 @@ void SFEMP3Shield::nextPlaylist()
     stopTrack();
     m_playlistIndex++;
     m_playlistIndex = min( m_playlistIndex, m_playlistMax );
-    m_playlist.setPlaylistNumber( m_playlistIndex );
-    m_playlist.readEntirePlayListFromSDCardToRAM();
-    togglePlayPause();
+    np__Playlist();
+}
+
+void SFEMP3Shield::nextPlaylistCircular()
+{
+    stopTrack();
+    m_playlistIndex++;
+    if( m_playlistIndex > m_playlistMax )
+        m_playlistIndex = 1;
+    np__Playlist();
 }
 
 void SFEMP3Shield::prevPlaylist()
@@ -754,10 +761,23 @@ void SFEMP3Shield::prevPlaylist()
     stopTrack();
     if( m_playlistIndex > 1 )
         m_playlistIndex--;
-    m_playlist.setPlaylistNumber( m_playlistIndex );
-    m_playlist.readEntirePlayListFromSDCardToRAM();
-    togglePlayPause();
+    np__Playlist();
 }
+
+void SFEMP3Shield::np__Playlist()
+{
+    m_playlist->setPlaylistNumber( m_playlistIndex );
+    m_playlist->readEntirePlayListFromSDCardToRAM();
+    playing_state = ready;
+//    togglePlayPause();
+    m_playlist->setTrackNum(1);
+    showNormalDisplay();
+    char path[30];
+    m_playlist->fullpath( path, m_playlist->filename );
+    playFile( path );
+    
+}
+
 
 
 
@@ -1023,12 +1043,12 @@ void SFEMP3Shield::showNormalDisplay()
 //        stopInterruptsRAII _obj1;
         lcd->clear();
         lcd->setCursor(0, 0);
-        lcd->print(m_playlist.artist);
+        lcd->print(m_playlist->artist);
         lcd->setCursor(0, 1);
-        lcd->print(m_playlist.title);
+        lcd->print(m_playlist->title);
         Serial.println("showNormalDisplay()");
-        Serial.println(m_playlist.artist);
-        Serial.println(m_playlist.title);
+        Serial.println(m_playlist->artist);
+        Serial.println(m_playlist->title);
 }
 
 uint8_t SFEMP3Shield::playFile(char* s, uint32_t timecode)
@@ -1092,11 +1112,11 @@ uint8_t SFEMP3Shield::playMP3(char* fileName, uint32_t timecode)
         // lcd->print( fileName );
         lcd->clear();
         lcd->setCursor(0, 0);
-        lcd->print(m_playlist.artist);
+        lcd->print(m_playlist->artist);
         lcd->setCursor(0, 1);
-        lcd->print(m_playlist.title);
-        Serial.println(m_playlist.artist);
-        Serial.println(m_playlist.title);
+        lcd->print(m_playlist->title);
+        Serial.println(m_playlist->artist);
+        Serial.println(m_playlist->title);
         
   }
   
@@ -2234,7 +2254,9 @@ SFEMP3Shield::getFinishedPlayingSong() const
 Playlist&
 SFEMP3Shield::getPlaylist()
 {
-    return m_playlist;
+    // Playlist p( this, "" );
+    // return p;
+    return *m_playlist;
 }
 
 
@@ -2318,6 +2340,7 @@ void
 Playlist::setPlaylistNumber( byte n )
 {
     m_playlistNumber = n;
+    sprintf( filename, "playls%d.lst", n );
 }
 
 

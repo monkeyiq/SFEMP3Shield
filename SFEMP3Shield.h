@@ -720,7 +720,7 @@ class SFEMP3Shield
     Shim_CharacterOLEDSPI3* lcd;
     byte     m_playlistIndex;
     byte     m_playlistMax;
-    Playlist m_playlist;
+    Playlist* m_playlist;
     unsigned m_finishedPlayingSong : 1;
     
     
@@ -766,7 +766,9 @@ class SFEMP3Shield
     void nextTrackCircular();
     void togglePlayPause();
     void nextPlaylist();
+    void nextPlaylistCircular();
     void prevPlaylist();
+    void np__Playlist();
     void trackTitle(char*);
     void trackArtist(char*);
     void trackAlbum(char*);
