@@ -678,6 +678,8 @@ class Playlist
         artistsz   = 40
     };
   public:
+    byte m_playlistNumber;
+    char playlistname[20];
     char trackInfo[100];
     char* filename;
     char* tracknum;
@@ -693,7 +695,9 @@ class Playlist
     Playlist( SFEMP3Shield* _delegate, const char* _filename );
     int  readEntirePlayListFromSDCardToRAM();
     void setFilename( const char* _filename );
-    
+    void setPlaylistNumber( byte n );
+    char* fullpath( char* ret, char* filename );
+
     void nextTrack();
     void nextTrackCircular();
     void prevTrack();
@@ -714,10 +718,12 @@ class SFEMP3Shield
     friend class SFEMP3ShieldNoINTRAII;
     
     Shim_CharacterOLEDSPI3* lcd;
-    byte playlistIndex;
-    byte playlistMax;
-    Playlist* playlists[10];
-    Playlist* playlist;
+    byte     m_playlistIndex;
+    byte     m_playlistMax;
+    Playlist m_playlist;
+    unsigned m_finishedPlayingSong : 1;
+    
+    
   public:
     SFEMP3Shield();
 
@@ -731,8 +737,9 @@ class SFEMP3Shield
     void setDisplay( Shim_CharacterOLEDSPI3* d );
     void showNormalDisplay();
     void touchScreenRefresherTimer();
+    bool getFinishedPlayingSong() const;
+    Playlist& getPlaylist();
     
-
     uint8_t begin();
     void end();
     uint8_t vs_init();

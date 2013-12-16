@@ -100,9 +100,12 @@ uint8_t  SFEMP3Shield::mp3DataBuffer[32];
 
 SFEMP3Shield::SFEMP3Shield()
     : lcd( 0 )
+    , m_playlist( this, "playls1.lst" )
+    , m_finishedPlayingSong( 0 )
+
 {
-    playlistIndex = 0;
-    playlistMax = 0;
+    m_playlistIndex = 1;
+    m_playlistMax = 0;
 }
 
 void
@@ -164,11 +167,28 @@ SFEMP3Shield::touchScreenRefresherTimer()
  */
 uint8_t  SFEMP3Shield::begin()
 {
+    {
+        SdFile f;
+    
+        if(!f.open( "global", O_READ ))
+        {
+            Serial.println(F("Can't load global file!"));            
+            return 12;
+        }
+    
+        uint8_t buffer[32];
+        if(f.read(buffer, sizeof(buffer)))
+        {
+            m_playlistMax = buffer[1]<<8 | buffer[0];
+            // sanity check sentinal
+            Serial.print(F("play list count:")); Serial.println(m_playlistMax);
+        }
+        f.close();
+    }
+    
     SPI.setClockDivider(SPI_CLOCK_DIV4);
-    playlists[0] = new Playlist( this, "playls1.lst" );
-    playlists[1] = 0;
-    playlist = playlists[ playlistIndex ];
-    playlist->readEntirePlayListFromSDCardToRAM();
+    m_playlist.setPlaylistNumber( 1 );
+    m_playlist.readEntirePlayListFromSDCardToRAM();
 
 /*
  This test is to assit in the migration from versions prior to 1.01.00.
@@ -669,22 +689,22 @@ byte SFEMP3Shield::adjustVolume( int8_t v )
 
 void SFEMP3Shield::nextTrack()
 {
-    playlist->nextTrack();
+    m_playlist.nextTrack();
 }
 void SFEMP3Shield::nextTrackCircular()
 {
-    playlist->nextTrackCircular();
+    m_playlist.nextTrackCircular();
 }
 
 
 void SFEMP3Shield::prevTrack()
 {
-    playlist->prevTrack();
+    m_playlist.prevTrack();
 }
 
 void SFEMP3Shield::adjustTrack( int v )
 {
-    playlist->adjustTrack( v );
+    m_playlist.adjustTrack( v );
 }
 
 void SFEMP3Shield::togglePlayPause()
@@ -714,17 +734,29 @@ void SFEMP3Shield::togglePlayPause()
     else
     {
         showNormalDisplay();
-        playFile( playlist->filename );
+        playFile( m_playlist.filename );
     }
     
 }
 
 void SFEMP3Shield::nextPlaylist()
 {
+    stopTrack();
+    m_playlistIndex++;
+    m_playlistIndex = min( m_playlistIndex, m_playlistMax );
+    m_playlist.setPlaylistNumber( m_playlistIndex );
+    m_playlist.readEntirePlayListFromSDCardToRAM();
+    togglePlayPause();
 }
 
 void SFEMP3Shield::prevPlaylist()
 {
+    stopTrack();
+    if( m_playlistIndex > 1 )
+        m_playlistIndex--;
+    m_playlist.setPlaylistNumber( m_playlistIndex );
+    m_playlist.readEntirePlayListFromSDCardToRAM();
+    togglePlayPause();
 }
 
 
@@ -991,16 +1023,17 @@ void SFEMP3Shield::showNormalDisplay()
 //        stopInterruptsRAII _obj1;
         lcd->clear();
         lcd->setCursor(0, 0);
-        lcd->print(playlist->artist);
+        lcd->print(m_playlist.artist);
         lcd->setCursor(0, 1);
-        lcd->print(playlist->title);
+        lcd->print(m_playlist.title);
         Serial.println("showNormalDisplay()");
-        Serial.println(playlist->artist);
-        Serial.println(playlist->title);
+        Serial.println(m_playlist.artist);
+        Serial.println(m_playlist.title);
 }
 
 uint8_t SFEMP3Shield::playFile(char* s, uint32_t timecode)
 {
+    m_finishedPlayingSong = 0;
     stopTrack();
     showNormalDisplay();
     uint8_t result = playMP3( s, timecode );
@@ -1040,15 +1073,16 @@ uint8_t SFEMP3Shield::playFile(char* s, uint32_t timecode)
  * - use \c SdFat::chvol() command prior, to select desired SdCard volume, if
  *   multiple cards are used.
  */
-uint8_t SFEMP3Shield::playMP3(char* fileName, uint32_t timecode) {
-
-  if(isPlaying()) return 1;
-  if(!digitalRead(MP3_RESET)) return 3;
-
+uint8_t SFEMP3Shield::playMP3(char* fileName, uint32_t timecode)
+{
+    m_finishedPlayingSong = 0;
+    if(isPlaying()) return 1;
+    if(!digitalRead(MP3_RESET)) return 3;
+    
 //  disableRefill();
-  Serial.print(F("playMP3() fn:"));
-  Serial.println(fileName);
-  delay(200);
+    Serial.print(F("playMP3() fn:"));
+    Serial.println(fileName);
+    delay(200);
   
   if( lcd )
   {
@@ -1058,11 +1092,11 @@ uint8_t SFEMP3Shield::playMP3(char* fileName, uint32_t timecode) {
         // lcd->print( fileName );
         lcd->clear();
         lcd->setCursor(0, 0);
-        lcd->print(playlist->artist);
+        lcd->print(m_playlist.artist);
         lcd->setCursor(0, 1);
-        lcd->print(playlist->title);
-        Serial.println(playlist->artist);
-        Serial.println(playlist->title);
+        lcd->print(m_playlist.title);
+        Serial.println(m_playlist.artist);
+        Serial.println(m_playlist.title);
         
   }
   
@@ -1973,7 +2007,8 @@ void SFEMP3Shield::refill() {
         //Go out to SD card and try reading 32 new bytes of the song
         track.close(); //Close out this track
         playing_state = ready;
-
+        MP3player.m_finishedPlayingSong = 1;
+        
         //cancel external interrupt
         disableRefill();
 
@@ -2165,7 +2200,9 @@ uint8_t SFEMP3Shield::ADMixerLoad(char* fileName){
  * \warning If file patch not applied this call will lock up the VS10xx.
  * need to add interlock to avoid.
  */
-void SFEMP3Shield::ADMixerVol(int8_t ADM_volume){
+void
+SFEMP3Shield::ADMixerVol(int8_t ADM_volume)
+{
   union twobyte MP3AIADDR;
   union twobyte MP3AICTRL0;
 
@@ -2187,6 +2224,20 @@ void SFEMP3Shield::ADMixerVol(int8_t ADM_volume){
     Mp3WriteRegister(SCI_AIADDR, MP3AIADDR.word);
   }
 }
+
+bool
+SFEMP3Shield::getFinishedPlayingSong() const
+{
+    return m_finishedPlayingSong;
+}
+
+Playlist&
+SFEMP3Shield::getPlaylist()
+{
+    return m_playlist;
+}
+
+
 
 
 //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -2262,6 +2313,13 @@ Playlist::setFilename( const char* _filename )
 {
     strcpy( filename, _filename );
 }
+
+void
+Playlist::setPlaylistNumber( byte n )
+{
+    m_playlistNumber = n;
+}
+
 
 void
 Playlist::ramcs_low()
@@ -2372,6 +2430,9 @@ Playlist::readEntirePlayListFromSDCardToRAM()
     playlistMax = 0;
     playlistMax = trackInfo[1]<<8 | trackInfo[0];
 
+    trackInfo[69] = '\0';
+    strcpy( playlistname, &trackInfo[50] );
+
     Serial.print(F("max track# from spi ram"));
     Serial.println(playlistMax);
     Serial.println((int)trackInfo[0]);
@@ -2398,7 +2459,7 @@ void
 Playlist::setTrackNum( int v )
 {
     m_delegate->stopTrack();
-    Serial.print("setTrackNum() v:"); Serial.println(v);
+    Serial.print(F("setTrackNum() v:")); Serial.println(v);
     delay(200);
     
     playlistIndex = v;
@@ -2425,21 +2486,29 @@ Playlist::setTrackNum( int v )
     tracknum = &trackInfo[ 0 + filenamesz ];
     title    = &trackInfo[ 0 + filenamesz + tracknumsz ];
     
-    Serial.print("setTrackNum() fn:");    Serial.println(filename);
-    Serial.print("setTrackNum() tracknum:"); Serial.println(tracknum);
-    Serial.print("setTrackNum() title:"); Serial.println(title);
+    Serial.print(F("setTrackNum() fn:"));    Serial.println(filename);
+    Serial.print(F("setTrackNum() tracknum:")); Serial.println(tracknum);
+    Serial.print(F("setTrackNum() title:")); Serial.println(title);
     delay(200);
 
 }
 
+char* Playlist::fullpath( char* ret, char* filename )
+{
+    sprintf( ret, "playls%d/%s", m_playlistNumber, filename );
+    return ret;
+}
 
+    
 void Playlist::nextTrack()
 {
     playlistIndex++;
     playlistIndex = min( playlistIndex, playlistMax );
 
     setTrackNum( playlistIndex );
-    m_delegate->playFile( filename );
+    char path[30];
+    fullpath( path, filename );
+    m_delegate->playFile( path );
         
 }
 void Playlist::nextTrackCircular()
@@ -2447,10 +2516,12 @@ void Playlist::nextTrackCircular()
     playlistIndex++;
     if( playlistIndex > playlistMax )
         playlistIndex = 1;
-    Serial.print("nextTrackCircular()"); Serial.println(playlistIndex);
+    Serial.print(F("nextTrackCircular()")); Serial.println(playlistIndex);
     delay(200);
     setTrackNum( playlistIndex );
-    m_delegate->playFile( filename );
+    char path[30];
+    fullpath( path, filename );
+    m_delegate->playFile( path );
 }
     
 void Playlist::prevTrack()
@@ -2460,7 +2531,9 @@ void Playlist::prevTrack()
         playlistIndex = 1;
     
     setTrackNum( playlistIndex );
-    m_delegate->playFile( filename );
+    char path[30];
+    fullpath( path, filename );
+    m_delegate->playFile( path );
 }
 void Playlist::adjustTrack( int v )
 {
@@ -2469,7 +2542,9 @@ void Playlist::adjustTrack( int v )
     playlistIndex = max( playlistIndex, 1 );
 
     setTrackNum( playlistIndex );
-    m_delegate->playFile( filename );
+    char path[30];
+    fullpath( path, filename );
+    m_delegate->playFile( path );
 }
 char* Playlist::getCurrentTrackName() 
 {
