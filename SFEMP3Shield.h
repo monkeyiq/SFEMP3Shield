@@ -794,14 +794,15 @@ class SFEMP3Shield
     int8_t setVUmeter(int8_t);
     int16_t getVUlevel();
 
-  private:
-    static SdFile track;
-    static void refill();
-    static void flush_cancel(flush_m);
     static void cs_low();
     static void cs_high();
     static void dcs_low();
     static void dcs_high();
+    
+  private:
+    static SdFile track;
+    static void refill();
+    static void flush_cancel(flush_m);
     static void Mp3WriteRegister(uint8_t, uint8_t, uint8_t);
     static void Mp3WriteRegister(uint8_t, uint16_t);
     static uint16_t Mp3ReadRegister (uint8_t);

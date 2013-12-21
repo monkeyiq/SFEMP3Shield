@@ -1,3 +1,4 @@
+
 /**
 \file SFEMP3ShieldConfig.h
 
@@ -123,7 +124,7 @@ Support for Arduino Leonardo is afflicted by having the SPI pins not routing the
 #define MP3_DREQINT          0 //Corresponding INTx for DREQ pin
 #endif
 #define MP3_RESET            8 //Reset is active low
-#define SD_SEL               9 //select pin for SD card
+#define SD_SEL               10  //select pin for SD card
 
 //------------------------------------------------------------------------------
 /**

@@ -1,3 +1,4 @@
+
 /**
 \file SFEMP3Shield.cpp
 
@@ -167,6 +168,9 @@ SFEMP3Shield::touchScreenRefresherTimer()
  */
 uint8_t  SFEMP3Shield::begin()
 {
+    //
+    // Load global file with info about how many playlists there are etc.
+    //
     {
         SdFile f;
     
