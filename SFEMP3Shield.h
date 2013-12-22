@@ -769,9 +769,6 @@ class SFEMP3Shield
     void nextPlaylistCircular();
     void prevPlaylist();
     void np__Playlist();
-    void trackTitle(char*);
-    void trackArtist(char*);
-    void trackAlbum(char*);
     void stopTrack();
     uint8_t isPlaying();
     uint8_t skip(int32_t);
@@ -802,13 +799,13 @@ class SFEMP3Shield
   private:
     static SdFile track;
     static void refill();
+    static void refill( bool verbose );
     static void flush_cancel(flush_m);
     static void Mp3WriteRegister(uint8_t, uint8_t, uint8_t);
     static void Mp3WriteRegister(uint8_t, uint16_t);
     static uint16_t Mp3ReadRegister (uint8_t);
     static uint16_t Mp3ReadWRAM(uint16_t);
     static void Mp3WriteWRAM(uint16_t, uint16_t);
-    void getTrackInfo(uint8_t, char*);
     static void enableRefill();
     static void disableRefill();
     void getBitRateFromMP3File(char*);

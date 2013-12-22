@@ -120,6 +120,7 @@ SFEMP3Shield::setDisplay( Shim_CharacterOLEDSPI3* d )
 void ScreenRefresherTimer()
 {
     Serial << F("ScreenRefresherTimer") << endl;
+    delay(200);
     m_screenRefreshTimerID = 0;
     
     byte playing = MP3player.isPlaying();
@@ -222,7 +223,8 @@ if (int8_t(sd.vol()->fatType()) == 0) {
 
   
   uint8_t result = vs_init();
-  if(result) {
+  if(result)
+  {
     return result;
   }
 
@@ -333,17 +335,20 @@ uint8_t SFEMP3Shield::vs_init()
   if(MP3Mode != (SM_LINE1 | SM_SDINEW)) return 4;
 
   //Now that we have the VS1053 up and running, increase the internal clock multiplier and up our SPI rate
-  Mp3WriteRegister(SCI_CLOCKF, 0x6000); //Set multiplier to 3.0x
+  int desiredClockF = 0xa000; // 4.0x
+  desiredClockF = 0xe000; // 5.0x (top speed)
+//  Mp3WriteRegister(SCI_CLOCKF, 0x6000); //Set multiplier to 3.0x
+  Mp3WriteRegister(SCI_CLOCKF, desiredClockF); //Set multiplier to 4.0x
   //Internal clock multiplier is now 3x.
-  //Therefore, max SPI speed is 52MgHz.
-  spiRate = SPI_CLOCK_DIV2; //use safe SPI rate of (16MHz / 4 = 4MHz)
-  spiRate = SPI_CLOCK_DIV4; //use safe SPI rate of (16MHz / 4 = 4MHz)
-//  spiRate = SPI_CLOCK_DIV16; //use safe SPI rate of (16MHz / 4 = 4MHz)
+  //Therefore, max SPI speed is 52MHz.
+  spiRate = SPI_CLOCK_DIV2; //use safe SPI rate of (16MHz / 2 = 8 MHz)
+//  spiRate = SPI_CLOCK_DIV4; //use safe SPI rate of (16MHz / 4 = 4 MHz)
+//  spiRate = SPI_CLOCK_DIV16; //use safe SPI rate of (16MHz / 16 = 1 MHz)
   delay(10); // settle time
 
   //test reading after data rate change
   int MP3Clock = Mp3ReadRegister(SCI_CLOCKF);
-  if(MP3Clock != 0x6000) return 5;
+  if(MP3Clock != desiredClockF) return 5;
 
   Serial.print(F("...2"));
   setVolume(40, 40);
@@ -1128,6 +1133,7 @@ uint8_t SFEMP3Shield::playMP3(char* fileName, uint32_t timecode)
   //Open the file in read mode.
   if(!track.open(fileName, O_READ)) return 2;
 
+#if 0  
   // find length of arrary at pointer
   int fileNamefileName_length = 0;
   while(*(fileName + fileNamefileName_length))
@@ -1139,22 +1145,28 @@ uint8_t SFEMP3Shield::playMP3(char* fileName, uint32_t timecode)
     getBitRateFromMP3File(fileName);
     Serial.print(F("bitrate:"));
     Serial.println(bitrate);
+    Serial.println(timecode);
+    Serial.println(start_of_music);
     if (timecode > 0) {
       track.seekSet(timecode * bitrate + start_of_music); // skip to X ms.
     }
   }
+#endif
 
   playing_state = playback;
 
-  Mp3WriteRegister(SCI_DECODE_TIME, 0); // Reset the Decode and bitrate from previous play back.
-  delay(100); // experimentally found that we need to let this settle before sending data.
+  // This will result in refill() being called.
+//  playing_state = testing_sinewave;
+//  Mp3WriteRegister(SCI_DECODE_TIME, 0); // Reset the Decode and bitrate from previous play back.
+  playing_state = playback;
+//  delay(200); // experimentally found that we need to let this settle before sending data.
 
-  Serial.println(F("Going to refill()"));
+  //gotta start feeding that hungry mp3 chip
+  refill( true );
+
+  Serial.println(F("Going to attach interrupt()"));
   delay(200);
   
-  //gotta start feeding that hungry mp3 chip
-//  refill();
-
   //attach refill interrupt off DREQ line, pin 2
   enableRefill();
 
@@ -1457,97 +1469,6 @@ uint32_t SFEMP3Shield::currentPosition(){
 // @}
 // Play_Control_Group
 
-//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-// @{
-// Audio_Information_Group
-
-//------------------------------------------------------------------------------
-/**
- * \brief Get Track's Artist
- *
- * \param[out] infobuffer pointer char array to be updated with result
- *
- * Extract the Artist from the current filehandles track ID3 tag information.
- *
- * \warning ID3 Tag information may not be present on all source files.
- * Otherwise may result in non-sense.
- * It is possible to add it with common tools outside of this project.
- */
-void SFEMP3Shield::trackArtist(char* infobuffer){
-  getTrackInfo(TRACK_ARTIST, infobuffer);
-}
-
-//------------------------------------------------------------------------------
-/**
- * \brief Get Track's Title
- *
- * \param[out] infobuffer pointer char array to be updated with result
- *
- * Extract the Title from the current filehandles track ID3 tag information.
- *
- * \warning ID3 Tag information may not be present on all source files.
- * Otherwise may result in non-sense.
- * It is possible to add it with common tools outside of this project.
- */
-void SFEMP3Shield::trackTitle(char* infobuffer){
-  getTrackInfo(TRACK_TITLE, infobuffer);
-}
-
-//------------------------------------------------------------------------------
-/**
- * \brief Get Track's Album
- *
- * \param[out] infobuffer pointer char array to be updated with result
- *
- * Extract the Album from the current filehandles track ID3 tag information.
- *
- * \warning ID3 Tag information may not be present on all source files.
- * Otherwise may result in non-sense.
- * It is possible to add it with common tools outside of this project.
- */
-void SFEMP3Shield::trackAlbum(char* infobuffer){
-  getTrackInfo(TRACK_ALBUM, infobuffer);
-}
-
-//------------------------------------------------------------------------------
-/**
- * \brief Fetch ID3 Tag information
- *
- * \param[in] offset for the desired information desired.
- * \param[out] infobuffer pointer char array of filename to be read.
- *
- * Read current filehandles offset of track ID3 tag information. Then strip
- * all non readible (ascii) characters.
- *
- * \note this suspends currently playing streams and returns afterwards.
- * Restoring the file position to where it left off, before resuming.
- */
-void SFEMP3Shield::getTrackInfo(uint8_t offset, char* infobuffer){
-
-  //disable interupts
-  if(playing_state == playback) {
-    disableRefill();
-  }
-
-  //record current file position
-  uint32_t currentPos = track.curPosition();
-
-  //skip to end
-  track.seekEnd((-128 + offset));
-
-  //read 30 bytes of tag informat at -128 + offset
-  track.read(infobuffer, 30);
-  infobuffer = strip_nonalpha_inplace(infobuffer);
-
-  //seek back to saved file position
-  track.seekSet(currentPos);
-
-  //renable interupt
-  if(playing_state == playback) {
-    enableRefill();
-  }
-
-}
 
 //------------------------------------------------------------------------------
 /**
@@ -2017,51 +1938,75 @@ void SFEMP3Shield::available() {
  * closed, the playing indicator is set to false, interrupts for refilling are
  * disabled and the VSdsp's data stream buffer is flushed appropiately.
  */
-void SFEMP3Shield::refill() {
-
-  //Serial.println(F("filling"));
-
-//    Serial.println("refill(top)");
-    
-  while(digitalRead(MP3_DREQ)) 
-  {
-
-    if(!track.read(mp3DataBuffer, sizeof(mp3DataBuffer)))
-    {
-        //Go out to SD card and try reading 32 new bytes of the song
-        track.close(); //Close out this track
-        playing_state = ready;
-        MP3player.m_finishedPlayingSong = 1;
-        
-        //cancel external interrupt
-        disableRefill();
-
-        flush_cancel(post); //possible mode of "none" for faster response.
-
-        //Oh no! There is no data left to read!
-        //Time to exit
-        break;
-    }
-
-    // Serial.print("while() we have datas! DREQ:");
-    // Serial.print(MP3_DREQ);
-    // Serial.print("  xdcs:");
-    // Serial.println(MP3_XDCS);
-    
-    // delay(100);
-    
-    //Once DREQ is released (high) we now feed 32 bytes of data to the VS1053 from our SD read buffer
-    dcs_low(); //Select Data
-    for(uint8_t y = 0 ; y < sizeof(mp3DataBuffer) ; y++)
-    {
-      //while(!digitalRead(MP3_DREQ)); // wait until DREQ is or goes high // turns out it is not needed.
-      SPI.transfer(mp3DataBuffer[y]); // Send SPI byte
-    }
-
-    dcs_high(); //Deselect Data
-    //We've just dumped 32 bytes into VS1053 so our SD read buffer is empty. go get more data
-  }
+void SFEMP3Shield::refill()
+{
+    refill( false );
 }
+
+
+void SFEMP3Shield::refill( bool verbose )
+{
+    if( verbose )
+    {
+        Serial.println(F("filling"));
+        Serial.println(playing_state);
+        Serial.println(spiRate);
+        Serial.println(MP3player.bitrate);
+        Serial.println(MP3player.start_of_music);
+        Serial.flush();
+        delay(200);
+    }
+
+    int bc = 0;
+    while(digitalRead(MP3_DREQ)) 
+    {
+
+        // Go out to SD card and try reading 32 new bytes of the song
+        if(!track.read(mp3DataBuffer, sizeof(mp3DataBuffer)))
+        {
+            if( verbose )
+            {
+                Serial.println(F("rr0"));
+                delay(200);
+            }
+            
+            track.close(); //Close out this track
+            playing_state = ready;
+            MP3player.m_finishedPlayingSong = 1;
+        
+            //cancel external interrupt
+            disableRefill();
+
+            flush_cancel(post); //possible mode of "none" for faster response.
+
+            //Oh no! There is no data left to read!
+            //Time to exit
+            break;
+        }
+
+        bc += 32;
+        if( (bc % 4096)==0 )
+        {
+            Serial.print(F("."));
+            delay(10);
+        }
+        
+    
+        // Once DREQ is released (high) we now feed 32 bytes
+        // of data to the VS1053 from our SD read buffer
+        dcs_low();
+        for(uint8_t y = 0 ; y < sizeof(mp3DataBuffer) ; y++)
+        {
+            SPI.transfer(mp3DataBuffer[y]);
+        }
+        dcs_high();
+        
+        // We've just dumped 32 bytes into VS1053 so
+        // our SD read buffer is empty. go get more data
+    }
+}
+
+
 
 //------------------------------------------------------------------------------
 /**
@@ -2157,9 +2102,10 @@ void SFEMP3Shield::flush_cancel(flush_m mode) {
     }
   }
   // Cancel has not succeeded.
-  //Serial.println(F("Warning: VS10XX chip did not cancel, reseting chip!"));
+  Serial.println(F("Warning: VS10XX chip did not cancel, reseting chip!"));
 //  Mp3WriteRegister(SCI_MODE, SM_LINE1 | SM_SDINEW | SM_RESET); // old way of SCI_MODE WRITE.
   Mp3WriteRegister(SCI_MODE, (Mp3ReadRegister(SCI_MODE) | SM_RESET));  // software reset. but vs_init will HW reset anyways.
+  delay(100);
 //  vs_init(); // perform hardware reset followed by re-initializing.
   //vs_init(); // however, SFEMP3Shield::begin() is member function that does not exist statically.
 }
@@ -2586,12 +2532,12 @@ SFEMP3ShieldNoINTRAII::SFEMP3ShieldNoINTRAII()
 {
     playing = MP3player.isPlaying();
     if( playing )
-        MP3player.disableRefill();
+        MP3player.pauseDataStream();
 }
 
 SFEMP3ShieldNoINTRAII::~SFEMP3ShieldNoINTRAII()
 {
     if( playing )
-        MP3player.enableRefill();
+        MP3player.resumeDataStream();
 }
 
