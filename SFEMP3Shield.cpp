@@ -228,6 +228,8 @@ if (int8_t(sd.vol()->fatType()) == 0) {
     return result;
   }
 
+//  setEarSpeaker( 0 );
+//  Mp3WriteRegister(SCI_BASS, 0 );
   
 #if defined(USE_MP3_REFILL_MEANS) && USE_MP3_REFILL_MEANS == USE_MP3_Timer1
   Timer1.initialize(MP3_REFILL_PERIOD);
@@ -1985,7 +1987,7 @@ void SFEMP3Shield::refill( bool verbose )
         }
 
         bc += 32;
-        if( (bc % 4096)==0 )
+        if( verbose && (bc % 4096)==0 )
         {
             Serial.print(F("."));
             delay(10);
