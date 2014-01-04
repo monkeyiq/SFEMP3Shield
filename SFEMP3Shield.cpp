@@ -5,6 +5,25 @@
 \brief Code file for the SFEMP3Shield library
 \remarks comments are implemented with Doxygen Markdown format
 
+    Original file is under the GPLv3
+    Updates contributed under the GPLv3
+
+    This is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    libferris is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this software.  If not, see <http://www.gnu.org/licenses/>.
+
+    For more details see the COPYING file in the root directory of this
+    distribution.
+
 */
 
 
@@ -122,7 +141,8 @@ void ScreenRefresherTimer()
     Serial << F("ScreenRefresherTimer") << endl;
     delay(200);
     m_screenRefreshTimerID = 0;
-    
+
+//    SFEMP3ShieldNoINTRAII _obj;
     byte playing = MP3player.isPlaying();
     if( playing )
         MP3player.disableRefill();
@@ -140,7 +160,7 @@ SFEMP3Shield::touchScreenRefresherTimer()
     if( m_screenRefreshTimerID )
         timer.restartTimer(m_screenRefreshTimerID);
     else
-        m_screenRefreshTimerID = timer.setTimeout( 4000, ScreenRefresherTimer );
+        m_screenRefreshTimerID = timer.setTimeout( 1500, ScreenRefresherTimer );
     
 }
 
@@ -339,7 +359,7 @@ uint8_t SFEMP3Shield::vs_init()
   //Now that we have the VS1053 up and running, increase the internal clock multiplier and up our SPI rate
   int desiredClockF = 0xa000; // 4.0x
   desiredClockF = 0xe000; // 5.0x (top speed)
-//  Mp3WriteRegister(SCI_CLOCKF, 0x6000); //Set multiplier to 3.0x
+  //desiredClockF = 0x6000; // 3x
   Mp3WriteRegister(SCI_CLOCKF, desiredClockF); //Set multiplier to 4.0x
   //Internal clock multiplier is now 3x.
   //Therefore, max SPI speed is 52MHz.
@@ -350,17 +370,17 @@ uint8_t SFEMP3Shield::vs_init()
 
   //test reading after data rate change
   int MP3Clock = Mp3ReadRegister(SCI_CLOCKF);
-  if(MP3Clock != desiredClockF) return 5;
+  if(MP3Clock != desiredClockF) return 15;
 
   Serial.print(F("...2"));
-  setVolume(40, 40);
+  setVolume(1, 1);
   // one would think the following patch would over write the volume.
   // But the SCI_VOL register space is not in the VSdsp's WRAM space.
   // Note to keep an eye on it for future patches.
 
   Serial.print(F("...3"));
   SPI.setClockDivider(SPI_CLOCK_DIV4);
-  if(VSLoadUserCode("patches.053")) return 6;
+//  if(VSLoadUserCode("patches.053")) return 6;
   Serial.print(F("...4"));
 
   delay(100); // just a good idea to let settle.
@@ -671,7 +691,7 @@ void SFEMP3Shield::setVolume(uint8_t leftchannel, uint8_t rightchannel){
         int val = -1 * leftchannel / 2;
         char buf[10];
         snprintf(buf,9," %.3d db ", val );
-        SFEMP3ShieldNoINTRAII _obj1;
+        //SFEMP3ShieldNoINTRAII _obj1;
         lcd->setCursor( 8, 0 );
         lcd->print( buf );
          
@@ -720,6 +740,9 @@ void SFEMP3Shield::adjustTrack( int v )
 
 void SFEMP3Shield::togglePlayPause()
 {
+    Serial.print(F("State:"));
+    Serial.println( getState() );
+    
     if( getState() == playback)
     {
         pauseMusic();
@@ -732,6 +755,7 @@ void SFEMP3Shield::togglePlayPause()
     }
     else if( getState() == paused_playback)
     {
+        Serial.println("playing");
         if( lcd )
         {
 //            stopInterruptsRAII _obj1;
@@ -747,7 +771,7 @@ void SFEMP3Shield::togglePlayPause()
         showNormalDisplay();
         playFile( m_playlist->filename );
     }
-    
+
 }
 
 void SFEMP3Shield::nextPlaylist()
@@ -1135,7 +1159,7 @@ uint8_t SFEMP3Shield::playMP3(char* fileName, uint32_t timecode)
   //Open the file in read mode.
   if(!track.open(fileName, O_READ)) return 2;
 
-#if 0  
+#if 1
   // find length of arrary at pointer
   int fileNamefileName_length = 0;
   while(*(fileName + fileNamefileName_length))
@@ -1160,11 +1184,11 @@ uint8_t SFEMP3Shield::playMP3(char* fileName, uint32_t timecode)
   // This will result in refill() being called.
 //  playing_state = testing_sinewave;
 //  Mp3WriteRegister(SCI_DECODE_TIME, 0); // Reset the Decode and bitrate from previous play back.
-  playing_state = playback;
+//  playing_state = playback;
 //  delay(200); // experimentally found that we need to let this settle before sending data.
 
   //gotta start feeding that hungry mp3 chip
-  refill( true );
+//  refill( true );
 
   Serial.println(F("Going to attach interrupt()"));
   delay(200);
@@ -1710,7 +1734,8 @@ void SFEMP3Shield::setBitRate(uint16_t bitr){
  */
 void SFEMP3Shield::cs_low() {
   SPI.setDataMode(SPI_MODE0);
-  SPI.setClockDivider(spiRate); //Set SPI bus speed to 1MHz (16MHz / 16 = 1MHz)
+//  SPI.setClockDivider(spiRate); //Set SPI bus speed to 1MHz (16MHz / 16 = 1MHz)
+  SPI.setClockDivider(SPI_CLOCK_DIV16); //Set SPI bus speed to 1MHz (16MHz / 16 = 1MHz)
 //  writer.digitalWrite( MP3_XCS, LOW );  
   digitalWrite(MP3_XCS, LOW);
 }
@@ -1960,7 +1985,7 @@ void SFEMP3Shield::refill( bool verbose )
     }
 
     int bc = 0;
-    while(digitalRead(MP3_DREQ)) 
+    while( MP3player.getState() == playback && digitalRead(MP3_DREQ)) 
     {
 
         // Go out to SD card and try reading 32 new bytes of the song
@@ -2532,7 +2557,10 @@ char* Playlist::getCurrentTrackName()
 
 SFEMP3ShieldNoINTRAII::SFEMP3ShieldNoINTRAII()
 {
-    playing = MP3player.isPlaying();
+    playing = 0;
+    if( MP3player.getState() == playback )
+        playing = 1;
+    
     if( playing )
         MP3player.pauseDataStream();
 }
