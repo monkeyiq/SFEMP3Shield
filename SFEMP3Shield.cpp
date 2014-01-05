@@ -317,7 +317,18 @@ uint8_t SFEMP3Shield::vs_init()
 
   //Bring out of reset
   digitalWrite(MP3_RESET, HIGH); //Bring up VS1053
+  delay(10);
 
+  // software reset.
+  Mp3WriteRegister(SCI_MODE, SM_SDINEW | SM_RESET);  
+  delay(10);
+
+  //Wait for DREQ to go high indicating IC is available
+  while(!digitalRead(MP3_DREQ))
+  {
+  }
+  
+  
   //From section 7.6 of datasheet, max SCI reads are CLKI/7.
   //Assuming CLKI = 12.288MgHz for Shield and 16.0MgHz for Arduino
   //The VS1053's internal clock multiplier SCI_CLOCKF:SC_MULT is 1.0x after power up.
@@ -353,8 +364,13 @@ uint8_t SFEMP3Shield::vs_init()
   Serial.print(F("MP3Mode:"));
   Serial.print(MP3Mode);
   Serial.println(F(""));
-  
-  if(MP3Mode != (SM_LINE1 | SM_SDINEW)) return 4;
+
+  // ensure new mode and no shared chip selector
+  // (we want xdcs and xcs to be individual) 
+  if(!(MP3Mode & SM_SDINEW))
+      return 4;
+  if((MP3Mode & SM_SDISHARE))
+      return 5;
 
   //Now that we have the VS1053 up and running, increase the internal clock multiplier and up our SPI rate
   int desiredClockF = 0xa000; // 4.0x
@@ -364,7 +380,7 @@ uint8_t SFEMP3Shield::vs_init()
   //Internal clock multiplier is now 3x.
   //Therefore, max SPI speed is 52MHz.
   spiRate = SPI_CLOCK_DIV2; //use safe SPI rate of (16MHz / 2 = 8 MHz)
-//  spiRate = SPI_CLOCK_DIV4; //use safe SPI rate of (16MHz / 4 = 4 MHz)
+  spiRate = SPI_CLOCK_DIV4; //use safe SPI rate of (16MHz / 4 = 4 MHz)
 //  spiRate = SPI_CLOCK_DIV16; //use safe SPI rate of (16MHz / 16 = 1 MHz)
   delay(10); // settle time
 
@@ -383,6 +399,14 @@ uint8_t SFEMP3Shield::vs_init()
 //  if(VSLoadUserCode("patches.053")) return 6;
   Serial.print(F("...4"));
 
+  // Send 2 zero bytes to the data bus.
+  // http://www.vsdsp-forum.com/phpbb/viewtopic.php?f=10&t=58
+  dcs_low();
+  SPI.transfer(0x0);
+  SPI.transfer(0x0);
+  dcs_high();
+
+  
   delay(100); // just a good idea to let settle.
 
   return 0; // indicating all was good.
@@ -1775,6 +1799,11 @@ void SFEMP3Shield::dcs_low() {
  * defined by MP3_XDCS.
  */
 void SFEMP3Shield::dcs_high() {
+    // Check that your chip select signals remain low until the end of the
+    // last bit of the last byte of the transmission.
+    // its a nasty way to do it, but maybe if it helps? doesn't help.
+    // delay(2);
+    
 //  writer.digitalWrite( MP3_XDCS, HIGH );  
   digitalWrite(MP3_XDCS, HIGH);
 }
